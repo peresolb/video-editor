@@ -1,0 +1,31 @@
+# Edit configuration for one video.
+# Run:      python3 edit_video.py THIS-FILE
+# Preview:  python3 edit_video.py THIS-FILE --plan   (shows the timeline, no encoding)
+
+input = "my_video.mov"            # The original video. The script never changes it.
+output = "my_video_edited.mp4"    # The script replaces this file on each run.
+keep_old_output = false           # true: rename the old output with a timestamp.
+
+# Optional settings. Remove the "#" to change a default.
+# fps = 30                        # Frame rate of the output.
+# crf = 20                        # Quality. A lower number gives higher quality and a larger file.
+# preset = "veryfast"             # Encoding speed: ultrafast, veryfast, medium, slow.
+
+# All times refer to the ORIGINAL video.
+# Time formats: 95 or 95.5 (seconds), "1:35", "0:01:35.5", "start", "end".
+# The order of the edits is not important. Parts with no edit play at normal speed.
+# A pause can be inside a speed interval. Speed intervals must not overlap.
+# Audio is silent during speed intervals and pauses.
+
+[[edit]]
+comment = "Example: long installation, nothing to see"
+action = "speed"
+from = "1:00"
+to = "2:00"
+factor = 20
+
+[[edit]]
+comment = "Example: let the viewer read the result"
+action = "pause"
+at = "2:30"
+seconds = 30
