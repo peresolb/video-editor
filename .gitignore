@@ -6,3 +6,5 @@
 *.avi
 __pycache__/
 .DS_Store
+*.toml
+!template.edit.toml

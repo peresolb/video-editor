@@ -4,7 +4,12 @@
 Usage:
     python3 edit_video.py --new VIDEO      Create VIDEO-NAME.edit.toml from the template.
     python3 edit_video.py CONFIG           Produce the edited video.
+    python3 edit_video.py CONFIG VIDEO     Apply CONFIG to VIDEO.
     python3 edit_video.py CONFIG --plan    Show the timeline only. Do not encode.
+
+Without VIDEO, the fields "input" and "output" in CONFIG give the files. With
+VIDEO, the script ignores these fields. The output is then VIDEO-NAME_edited.mp4
+next to VIDEO, or the file that --output gives.
 
 The script needs Python 3.11 or later and ffmpeg. It never writes to the input video.
 """
@@ -238,6 +243,8 @@ def print_plan(segments: list[Segment]) -> None:
 
 def create_config(video: Path) -> Path:
     """Create a configuration file for ``video`` from the template."""
+    if not video.is_file():
+        raise ConfigError(f"The video does not exist: {video}")
     target = video.with_suffix(".edit.toml")
     if target.exists():
         raise ConfigError(f"{target} exists already. The script did not change it.")
@@ -248,20 +255,35 @@ def create_config(video: Path) -> Path:
     return target
 
 
-def run(config_path: Path, plan_only: bool) -> None:
-    """Read the configuration and produce the edited video."""
+def run(
+    config_path: Path, video: Path | None, output_path: Path | None, plan_only: bool
+) -> None:
+    """Read the configuration and produce the edited video.
+
+    ``video`` and ``output_path`` come from the command line and replace the
+    fields "input" and "output" of the configuration.
+    """
+    if not config_path.is_file():
+        raise ConfigError(f"The configuration file does not exist: {config_path}")
     try:
         config = tomllib.loads(config_path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"{config_path.name} is not valid TOML: {error}") from None
-    try:
+    if video:
+        source = video.resolve()
+        output = source.with_name(f"{source.stem}_edited.mp4")
+    elif "input" in config:
         source = (config_path.parent / config["input"]).resolve()
-    except KeyError:
-        raise ConfigError('The field "input" is missing.') from None
+        default_output = f"{source.stem}_edited.mp4"
+        output = (config_path.parent / config.get("output", default_output)).resolve()
+    else:
+        raise ConfigError(
+            'No video. Give a video on the command line or set "input" in the file.'
+        )
+    if output_path:
+        output = output_path.resolve()
     if not source.is_file():
         raise ConfigError(f"The input video does not exist: {source}")
-    default_output = f"{source.stem}_edited.mp4"
-    output = (config_path.parent / config.get("output", default_output)).resolve()
     if output == source:
         raise ConfigError("The output must not be the same file as the input.")
 
@@ -306,6 +328,10 @@ def main() -> int:
     """Run the command line interface."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("config", nargs="?", type=Path, help="the .edit.toml file")
+    parser.add_argument("video", nargs="?", type=Path,
+                        help='the video to edit, replaces "input" in the file')
+    parser.add_argument("--output", type=Path, metavar="FILE",
+                        help='the video to write, replaces "output" in the file')
     parser.add_argument("--new", type=Path, metavar="VIDEO",
                         help="create a configuration file for VIDEO")
     parser.add_argument("--plan", action="store_true",
@@ -315,7 +341,7 @@ def main() -> int:
         if args.new:
             print(f"Created {create_config(args.new)}")
         elif args.config:
-            run(args.config, args.plan)
+            run(args.config, args.video, args.output, args.plan)
         else:
             parser.print_help()
             return 2

@@ -2,6 +2,8 @@
 # Run:      python3 edit_video.py THIS-FILE
 # Preview:  python3 edit_video.py THIS-FILE --plan   (shows the timeline, no encoding)
 
+# "input" and "output" are optional. A video on the command line replaces them:
+#           python3 edit_video.py THIS-FILE VIDEO [--output FILE]
 input = "my_video.mov"            # The original video. The script never changes it.
 output = "my_video_edited.mp4"    # The script replaces this file on each run.
 keep_old_output = false           # true: rename the old output with a timestamp.
