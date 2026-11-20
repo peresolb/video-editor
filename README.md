@@ -1,6 +1,6 @@
 # video-editor
 
-Speed up intervals and insert pauses in a video. A TOML file says what to do.
+Speed up intervals, cut intervals and insert pauses in a video. A TOML file says what to do.
 The original video is never changed.
 
 ## Requirements
@@ -70,11 +70,12 @@ python3 edit_video.py CONFIG VIDEO --output FILE    # also choose the output fil
 | Action  | Fields                 | Result                                            |
 |---------|------------------------|---------------------------------------------------|
 | `speed` | `from`, `to`, `factor` | Plays the interval `factor` times faster.         |
+| `cut`   | `from`, `to`           | Removes the interval from the output.             |
 | `pause` | `at`, `seconds`        | Shows the frame at `at` for `seconds` seconds.    |
 
 Each edit can have a `comment`. The timeline shows the comment. All times refer
-to the original video. A pause can be inside a speed interval. Speed intervals
-must not overlap. Audio is silent during speed intervals and pauses.
+to the original video. A pause can be inside a speed interval, but not inside
+a cut interval. Speed intervals and cut intervals must not overlap. Audio is silent during speed intervals and pauses.
 
 ## Tests
 

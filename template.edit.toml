@@ -16,7 +16,8 @@ keep_old_output = false           # true: rename the old output with a timestamp
 # All times refer to the ORIGINAL video.
 # Time formats: 95 or 95.5 (seconds), "1:35", "0:01:35.5", "start", "end".
 # The order of the edits is not important. Parts with no edit play at normal speed.
-# A pause can be inside a speed interval. Speed intervals must not overlap.
+# A pause can be inside a speed interval, but not inside a cut interval.
+# Speed intervals and cut intervals must not overlap.
 # Audio is silent during speed intervals and pauses.
 
 [[edit]]
@@ -31,3 +32,9 @@ comment = "Example: let the viewer read the result"
 action = "pause"
 at = "2:30"
 seconds = 30
+
+[[edit]]
+comment = "Example: remove a mistake"
+action = "cut"
+from = "3:00"
+to = "3:20"

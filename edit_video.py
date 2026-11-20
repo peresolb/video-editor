@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Speed up intervals and insert pauses in a video, driven by a TOML file.
+"""Speed up intervals, cut intervals and insert pauses in a video, driven by a TOML file.
 
 Usage:
     python3 edit_video.py --new VIDEO      Create VIDEO-NAME.edit.toml from the template.
@@ -38,8 +38,9 @@ class Segment:
     """One part of the output video.
 
     A segment with ``pause`` > 0 shows the source frame at ``start`` for
-    ``pause`` seconds. Other segments play the source from ``start`` to ``end``
-    at ``factor`` times the normal speed.
+    ``pause`` seconds. A segment with ``cut`` set is a part of the source that
+    the output does not contain. Other segments play the source from ``start``
+    to ``end`` at ``factor`` times the normal speed.
     """
 
     start: float
@@ -47,10 +48,13 @@ class Segment:
     factor: float = 1.0
     pause: float = 0.0
     comment: str = ""
+    cut: bool = False
 
     @property
     def duration(self) -> float:
         """Return the length of the segment in the output video, in seconds."""
+        if self.cut:
+            return 0.0
         return self.pause if self.pause else (self.end - self.start) / self.factor
 
 
@@ -91,8 +95,11 @@ def build_segments(edits: list[dict], duration: float) -> list[Segment]:
     """Convert the edits from the configuration to an ordered list of segments.
 
     All times in the edits refer to the original video. A pause can be inside
-    a speed interval. Speed intervals must not overlap.
+    a speed interval, but not inside a cut interval. Speed intervals and cut
+    intervals must not overlap. The result includes the cut segments, marked
+    with ``cut``.
     """
+    cut_factor = 0.0
     speeds: list[tuple[float, float, float, str]] = []
     pauses: list[tuple[float, float, str]] = []
     for number, edit in enumerate(edits, start=1):
@@ -100,13 +107,13 @@ def build_segments(edits: list[dict], duration: float) -> list[Segment]:
         comment = str(edit.get("comment", ""))
         action = edit.get("action")
         try:
-            if action == "speed":
+            if action in ("speed", "cut"):
                 start = parse_time(edit["from"], duration)
                 end = min(parse_time(edit["to"], duration), duration)
-                factor = float(edit["factor"])
+                factor = cut_factor if action == "cut" else float(edit["factor"])
                 if not 0 <= start < end:
                     raise ConfigError(f'{label}: "from" must be before "to".')
-                if factor <= 0:
+                if action == "speed" and factor <= 0:
                     raise ConfigError(f'{label}: "factor" must be more than 0.')
                 speeds.append((start, end, factor, comment))
             elif action == "pause":
@@ -119,7 +126,8 @@ def build_segments(edits: list[dict], duration: float) -> list[Segment]:
                 pauses.append((at, seconds, comment))
             else:
                 raise ConfigError(
-                    f'{label}: "action" must be "speed" or "pause", not {action!r}.'
+                    f'{label}: "action" must be "speed", "cut" or "pause", '
+                    f"not {action!r}."
                 )
         except KeyError as missing:
             raise ConfigError(f"{label}: the field {missing} is missing.") from None
@@ -132,8 +140,15 @@ def build_segments(edits: list[dict], duration: float) -> list[Segment]:
     for (_, first_end, _, _), (second_start, _, _, _) in zip(speeds, speeds[1:]):
         if second_start < first_end:
             raise ConfigError(
-                f"Two speed intervals overlap at {format_time(second_start)}."
+                f"Two speed or cut intervals overlap at {format_time(second_start)}."
             )
+
+    for at, _, _ in pauses:
+        for start, end, factor, _ in speeds:
+            if factor == cut_factor and start < at < end:
+                raise ConfigError(
+                    f"The pause at {format_time(at)} is inside a cut interval."
+                )
 
     cuts = {0.0, duration}
     for start, end, _, _ in speeds:
@@ -154,7 +169,12 @@ def build_segments(edits: list[dict], duration: float) -> list[Segment]:
         for speed_start, speed_end, speed_factor, speed_comment in speeds:
             if speed_start <= start and end <= speed_end:
                 factor, comment = speed_factor, speed_comment
-        segments.append(Segment(start=start, end=end, factor=factor, comment=comment))
+        if factor == cut_factor:
+            segments.append(Segment(start=start, end=end, comment=comment, cut=True))
+        else:
+            segments.append(
+                Segment(start=start, end=end, factor=factor, comment=comment)
+            )
         segments.extend(pauses_at(end))
     return segments
 
@@ -228,6 +248,10 @@ def print_plan(segments: list[Segment]) -> None:
     print(f"{'Original':<23}{'New video':<23}{'Action':<12}Comment")
     position = 0.0
     for segment in segments:
+        if segment.cut:
+            source = f"{format_time(segment.start)}-{format_time(segment.end)}"
+            print(f"{source:<23}{'(removed)':<23}{'cut':<12}{segment.comment}")
+            continue
         if segment.pause:
             source = format_time(segment.start)
             action = f"pause {segment.pause:g}s"
@@ -291,6 +315,9 @@ def run(
     fps = float(config.get("fps", 30))
     segments = build_segments(config.get("edit", []), duration)
     print_plan(segments)
+    segments = [segment for segment in segments if not segment.cut]
+    if not segments:
+        raise ConfigError("The cut intervals remove the full video.")
     if plan_only:
         return
 

@@ -58,6 +58,31 @@ class BuildSegmentsTest(unittest.TestCase):
         with self.assertRaises(ConfigError):
             build_segments(edits, 100)
 
+    def test_cut_removes_the_interval(self) -> None:
+        edits = [
+            {"action": "cut", "from": 20, "to": 60},
+            {"action": "pause", "at": 60, "seconds": 5},
+        ]
+        segments = build_segments(edits, 100)
+        self.assertEqual([s.duration for s in segments], [20, 0, 5, 40])
+        self.assertEqual([s.cut for s in segments], [False, True, False, False])
+
+    def test_cut_that_overlaps_speed_is_an_error(self) -> None:
+        edits = [
+            {"action": "speed", "from": 0, "to": 40, "factor": 10},
+            {"action": "cut", "from": 30, "to": 50},
+        ]
+        with self.assertRaises(ConfigError):
+            build_segments(edits, 100)
+
+    def test_pause_inside_cut_is_an_error(self) -> None:
+        edits = [
+            {"action": "cut", "from": 20, "to": 60},
+            {"action": "pause", "at": 30, "seconds": 5},
+        ]
+        with self.assertRaises(ConfigError):
+            build_segments(edits, 100)
+
     def test_missing_field_is_an_error(self) -> None:
         with self.assertRaises(ConfigError):
             build_segments([{"action": "pause", "at": 5}], 100)
